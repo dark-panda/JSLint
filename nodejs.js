@@ -72,14 +72,68 @@ Copyright (c) 2013 J Smith <dark.panda@gmail.com> Node Edition
     return retval;
   }
 
+  function StdoutPrinter() {
+    this.output = [];
+  }
+
+  StdoutPrinter.prototype.addErrors = function(fileName, errors) {
+    var that = this;
+
+    this.output.push("ERRORS in " + fileName + ":");
+    errors.forEach(function(e) {
+      if (e) {
+        that.output.push('Lint at line ' + e.line + ' character ' + e.character + ': ' + e.reason);
+        that.output.push((e.evidence || '').replace(/^\s*(\S*(\s+\S+)*)\s*$/, "$1"));
+        that.output.push('');
+      }
+    });
+    this.output.push("\n\n");
+  };
+
+  StdoutPrinter.prototype.addSuccess = function(fileName) {
+    this.output.push("SUCCESS! No problems found in " + fileName + "\n\n");
+  };
+
+  StdoutPrinter.prototype.print = function() {
+    print(this.output.join("\n"));
+  };
+
+  function JSONPrinter() {
+    this.output = [];
+  };
+
+  JSONPrinter.prototype.addErrors = function(fileName, errors) {
+    this.output.push({
+      "filename": fileName,
+      "errors": errors
+    });
+  };
+
+  JSONPrinter.prototype.addSuccess = function(fileName) {
+    // no-op
+    return;
+  };
+
+  JSONPrinter.prototype.print = function() {
+    print(JSON.stringify(this.output));
+  };
+
   (function() {
     var ARGV = readArgs(),
       exit = 0,
       files = ARGV.files,
-      options = ARGV.options;
+      options = ARGV.options,
+      printer;
 
     if (!files.length) {
       files = [ '/dev/stdin' ];
+    }
+
+    if (options.json) {
+      printer = new JSONPrinter();
+    }
+    else {
+      printer = new StdoutPrinter();
     }
 
     files.forEach(function(fileName) {
@@ -88,27 +142,18 @@ Copyright (c) 2013 J Smith <dark.panda@gmail.com> Node Edition
       var input = FS.readFileSync(fileName, 'utf8');
 
       if (!JSLINT(input, options)) {
-        (function() {
-          print("ERRORS in " + fileName + ":");
-          JSLINT.errors.forEach(function(e) {
-            if (e) {
-              print('Lint at line ' + e.line + ' character ' + e.character + ': ' + e.reason);
-              print((e.evidence || '').replace(/^\s*(\S*(\s+\S+)*)\s*$/, "$1"));
-              print('');
-            }
-          });
-          print("\n\n");
-          exit = 2;
-        }());
+        printer.addErrors(fileName, JSLINT.errors);
+        exit = 2;
       }
       else {
         if (options.verbose) {
-          print("SUCCESS! No problems found in " + fileName + "\n\n");
+          printer.addSuccess(fileName);
         }
       }
     });
 
+    printer.print();
+
     quit(exit);
   }());
 }());
-
